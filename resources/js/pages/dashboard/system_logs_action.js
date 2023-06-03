@@ -1,0 +1,159 @@
+const { default: axios } = require("axios")
+
+void new class FetchSpecificSystemLog{
+
+    constructor()
+    {
+        this.form = document.querySelector('#update_user_profile')
+        this.user_role = $('meta[name=user_role]').attr('content')
+        this.eventHandlers()
+        this.initValidation()
+        this.financeUploadLog(this.user_role)
+    }
+
+    eventHandlers = () => {
+        $('.log_details').on('click',this.viewLogDetails)
+
+        document.querySelector('#system_logs_accept_update').addEventListener('click', async(e) => {
+            e.preventDefault()
+
+            let status = await this.validation.validate()
+
+            this.currUserID = (e.target).dataset.id
+            this.currSysLogsID = (e.target).dataset.logs
+            this.status = (e.target).dataset.stats
+            if(status === 'Valid') this.actionUpdateConfirmation()
+        })
+
+        document.querySelector('#DeclineUserUpdateModal').addEventListener('click', async(e) => {
+            e.preventDefault()
+            let status = await this.validation.validate()
+
+            this.currSysLogsID = (e.target).dataset.logs
+            this.status = (e.target).dataset.stats
+            if(status === 'Valid') this.actionUserUpdateAjax()
+        })
+
+    }
+
+    financeUploadLog = async(role) => {
+        const {data:result} = await axios.get('/admin/finance/logs')
+        result.forEach((elem) => {
+            $('#tenant_uploaded').append(`
+                <div class="timeline-item align-items-start" id="">
+                    <div class="timeline-label font-weight-bolder text-dark-75 font-size-lg text-right pr-3">${humanDate(elem.created_at)}</div>
+                    <div class="timeline-badge">
+                        <i class="fa fa-genderless text-success icon-xxl"></i>
+                    </div>
+                    <div class="timeline-content text-dark-50">
+                    ${elem.master_tenant_lease_number ? elem.master_tenant_lease_number.tenant : 'Admin'} uploaded ${elem.attachable_type.slice(11) == 'BirAttachment' ? 'BIR 2307' : elem.attachable_type.slice(11) == 'ProofOfPayment' ? 'Proof of Payment' : 'Others'}
+                    <a href="/contract/${elem.taggable_id.length ? elem.master_tenant_lease_number.lease_number : elem.master_tenant_number.lease_number}" class="text-primary log_details" id="update_log" data-id="${elem.id}" ${role == 1 ? '' : 'hidden'}>View Details.</a>
+                    </div>
+                </div>
+            `)
+        })
+
+
+    }
+
+    viewLogDetails = async({currentTarget}) => {
+        try{
+            const logId = currentTarget.dataset.id
+            const {data:result} = await axios.get(`/admin/logs/${logId}`)
+            const details = JSON.parse(result.details)
+            const personDetails = details['App\\Models\\People']
+            const userDetails = details['App\\Models\\User']
+
+            $('#first_name').val(personDetails.first_name)
+            $('#last_name').val(personDetails.last_name)
+            $('#address1').val(personDetails.address1)
+            $('#phone_number').val(personDetails.phone_number)
+            $('#email').val(userDetails.email)
+
+            $('#system_logs_accept_update').attr({'data-id':result.user_id,'data-logs': result.id, 'data-stats': 1})
+            $('#DeclineUserUpdateModal').attr({'data-id':result.user_id,'data-logs':result.id, 'data-stats': 2})
+
+
+
+        }catch(err){
+            console.log(err)
+        }
+    }
+
+    actionUpdateConfirmation = async() => {
+        confirmAlert('Updating user?','Do you wish to continue?', this.actionUserUpdateAjax)
+    }
+
+    actionUserUpdateAjax = async() => {
+        this.formData = new FormData(this.form)
+        this.formData.append('user_id', this.currUserID)
+        this.formData.append('status', this.status)
+        try{
+            const response = await axios.post(`/admin/action/user/update/${this.currSysLogsID}`, this.formData)
+
+            const data = response.data;
+
+            // $('#addCcAnalystModal').click()
+            this.form.reset()
+            showAlert('Success!', data.message, 'success')
+            if(this.status == 2){
+                $('#logDetails').modal('toggle')
+            }
+        }catch({response:err}){
+                showAlert('Warning!', 'Something went wrong', 'warning')
+
+        }
+
+
+    }
+    initValidation() {
+        this.validation = FormValidation.formValidation(
+            this.form,
+            {
+                fields:{
+                    first_name:{
+                        validators:{
+                            notEmpty:{
+                                message:"First name is required"
+                            }
+                        }
+                    },
+                    last_name:{
+                        validators:{
+                            notEmpty:{
+                                message:"last name is required"
+                            }
+                        }
+                    },
+                    email:{
+                        validators:{
+                            notEmpty:{
+                                message:"Email is required"
+                            }
+                        }
+                    },
+                    address1:{
+                        validators:{
+                            notEmpty:{
+                                message:"Address is required"
+                            }
+                        }
+                    },
+                    phone_number:{
+                        validators:{
+                            notEmpty:{
+                                message:"Phone number is required"
+                            }
+                        }
+                    }
+
+                },
+                plugins: {
+					trigger: new FormValidation.plugins.Trigger(),
+					bootstrap: new FormValidation.plugins.Bootstrap()
+				}
+            }
+        )
+    }
+
+}
